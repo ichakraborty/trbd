@@ -29,7 +29,7 @@ app = Flask(__name__)
 
 # Generate timestamped log file with project ID prefix
 time_stamp = datetime.now().strftime("%m%d_%H_%M")
-output_folder = "/scratch/ichakraborty/trbd"
+output_folder = "/mnt/lake-database/event-staging" #"/scratch/ichakraborty/trbd"
 data_file = os.path.join(output_folder, f"{project_id}_event_log_{time_stamp}.csv")
 
 # Create file with headers if it doesn't exist
