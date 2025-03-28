@@ -1,51 +1,40 @@
-"""
-Flask app to log clinical events of interest for 
-TRBD Clinical Trial with Baylor College of Medicine. 
-Code is only to be used by medical students logging events
-with patient during interactions. 
-
-Code is not meant to be modified, altered, or copied
-for any other purpose besides TRBD Clinical trial. 
-
-@author  Isha Chakraborty
-@version 1.1 03/27/2025
-"""
-
 import sys
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 import pandas as pd
 import os
 
-# Require project_id as a command-line argument
-if len(sys.argv) < 2:
-    print("Error: You must provide a project_id to run this script.")
-    print("Usage: python event_logger_with_project_id.py <project_id>")
-    sys.exit(1)
-
-project_id = sys.argv[1]
+project_id = ""
+if len(sys.argv) >= 2:
+    project_id = sys.argv[1]
 
 app = Flask(__name__)
 
-# Generate timestamped log file with project ID prefix
 time_stamp = datetime.now().strftime("%m%d_%H_%M")
-output_folder = "/mnt/lake-database/event-staging" #"/scratch/ichakraborty/trbd"
-data_file = os.path.join(output_folder, f"{project_id}_event_log_{time_stamp}.csv")
+output_folder = ""
+if project_id == "":
+    data_file = os.path.join(output_folder, f"event_log_{time_stamp}.csv")
+else:
+    data_file = os.path.join(output_folder, f"{project_id}_event_log_{time_stamp}.csv")
 
-# Create file with headers if it doesn't exist
 if not os.path.exists(data_file):
-    df = pd.DataFrame(columns=["Event", "Start Date", "Start Time", "End Date", "End Time"])
+    df = pd.DataFrame(columns=["Event", "Start Date", "Start Time", "End Date", "End Time", "Notes"])
     df.to_csv(data_file, index=False, mode='w', header=True)
 
 active_events = {}
 
-def log_event(event_name, start_time, end_time):
+
+def log_event(event_name, start_time, end_time, notes=""):
+    end_date = end_time.strftime("%Y-%m-%d") if end_time else "N/A"
+    end_time_str = end_time.strftime("%H:%M:%S") if end_time else "N/A"
+
     data = {
         "Event": event_name,
         "Start Date": start_time.strftime("%Y-%m-%d"),
         "Start Time": start_time.strftime("%H:%M:%S"),
-        "End Date": end_time.strftime("%Y-%m-%d"),
-        "End Time": end_time.strftime("%H:%M:%S")
+        "End Date": end_date,
+        "End Time": end_time_str,
+        "Notes": notes
     }
     df = pd.DataFrame([data])
     df.to_csv(data_file, mode='a', header=False, index=False)
@@ -53,19 +42,36 @@ def log_event(event_name, start_time, end_time):
     print(data)
 
 
-
 @app.route('/toggle_event', methods=['POST'])
 def toggle_event():
     data = request.get_json()
     event_name = data['event']
+    notes = data.get('notes', '')
+
     if event_name in active_events:
-        end_time = datetime.now()
         start_time = active_events.pop(event_name)
-        log_event(event_name, start_time, end_time)
-        return jsonify({"message": f"Ended {event_name}", "status": "Press a button to start an event"})
+        log_event(event_name, start_time, datetime.now(), notes)
+        return jsonify({"message": f"Ended {event_name}", "status": "Press a button to start an event", "active_event": None})
     else:
+        active_events.clear()
         active_events[event_name] = datetime.now()
-        return jsonify({"message": f"Started {event_name}", "status": f"{event_name} has started"})
+        return jsonify({"message": f"Started {event_name}", "status": f"{event_name} has started", "active_event": event_name})
+
+
+@app.route('/abort_event', methods=['POST'])
+def abort_event():
+    data = request.get_json()
+    notes = data.get('notes', '')
+    event_name = next(iter(active_events), None)
+
+    if event_name:
+        start_time = active_events.pop(event_name)
+        notes = f"ABORTED: {notes}" if notes else "ABORTED"
+        log_event(event_name, start_time, None, notes)
+        return jsonify({"message": f"Aborted {event_name}", "status": "Event Aborted", "active_event": None})
+    else:
+        return jsonify({"message": "No active event to abort.", "status": "No active event", "active_event": None})
+
 
 @app.route('/')
 def home():
@@ -93,6 +99,13 @@ def home():
                 gap: 20px;
                 text-align: center;
             }
+            .controls {
+                margin-top: 30px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
             button {
                 width: 200px;
                 height: 100px;
@@ -110,34 +123,74 @@ def home():
             .btn5 { background-color: #e0bbff; }
             .btn6 { background-color: #fdfd96; }
             .btn7 { background-color: #c1f0f6; }
-            .active { background-color: #4CAF50 !important; color: white; }
+            .abort-btn { background-color: #ff4444; color: white; width: 220px; height: 50px; }
+            .notes-input { padding: 10px; font-size: 16px; width: 400px; border-radius: 10px; border: 1px solid #ccc; }
+            .active { background-color: #32CD32 !important; color: white; }
         </style>
         <script>
+            let currentEvent = null;
+            let activeButton = null;
+
             function playBeep() {
-                var context = new (window.AudioContext || window.webkitAudioContext)();
-                var oscillator = context.createOscillator();
+                const context = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = context.createOscillator();
                 oscillator.type = "sine";
                 oscillator.frequency.setValueAtTime(1000, context.currentTime);
                 oscillator.connect(context.destination);
                 oscillator.start();
                 setTimeout(() => oscillator.stop(), 300);
             }
+
+            function getNotes() {
+                return document.getElementById("notes").value;
+            }
+
             function toggleEvent(eventName, button) {
                 fetch('/toggle_event', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 'event': eventName })
+                    body: JSON.stringify({ 'event': eventName, 'notes': getNotes() })
                 }).then(response => response.json())
                   .then(data => {
                       document.getElementById("status").innerText = data.status;
-                      button.classList.toggle('active');
+                      if (activeButton && activeButton !== button) {
+                          activeButton.classList.remove('active');
+                      }
+                      if (data.active_event === null) {
+                          button.classList.remove('active');
+                          document.getElementById("notes").value = "";
+                      } else {
+                          button.classList.add('active');
+                          activeButton = button;
+                      }
+                      currentEvent = data.active_event;
+                      playBeep();
+                  });
+            }
+
+            function abortEvent() {
+                if (!currentEvent) {
+                    alert("No active event to abort.");
+                    return;
+                }
+
+                fetch('/abort_event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 'notes': getNotes() })
+                }).then(response => response.json())
+                  .then(data => {
+                      document.getElementById("status").innerText = data.status;
+                      if (activeButton) activeButton.classList.remove('active');
+                      currentEvent = data.active_event;
+                      document.getElementById("notes").value = "";
                       playBeep();
                   });
             }
         </script>
     </head>
     <body>
-        <div class="status">Project ID: {{project_id}}</div>
+        ''' + (f'<div class="status">Project ID: {project_id}</div>' if project_id else '') + '''
         <div id="status" class="status">Press a button to start an event</div>
         <div class="container">
             <button class="btn1" onclick="toggleEvent('DBS Programming Session', this)">DBS Programming Session</button>
@@ -148,10 +201,14 @@ def home():
             <button class="btn7" onclick="toggleEvent('Sleep Period', this)">Sleep Period</button>
             <button class="btn4" onclick="toggleEvent('Other', this)">Other</button>
         </div>
+        <div class="controls">
+            <input type="text" id="notes" class="notes-input" placeholder="Enter optional notes (only while event active)..." />
+            <button class="abort-btn" onclick="abortEvent()">Abort Current Event</button>
+        </div>
     </body>
     </html>
     '''
-    return html_content.replace("{{project_id}}", project_id)
+    return html_content
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
