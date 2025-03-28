@@ -1,3 +1,18 @@
+"""
+Flask app to log clinical events of interest for 
+TRBD Clinical Trial with Baylor College of Medicine. 
+Code is only to be used by medical students logging events
+with patient during interactions. 
+
+Code is not meant to be modified, altered, or copied
+for any other purpose besides TRBD Clinical trial. 
+
+@author  Isha Chakraborty
+@version 1.2 03/28/2025
+"""
+
+
+
 import sys
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
