@@ -11,8 +11,6 @@ for any other purpose besides TRBD Clinical trial.
 @version 1.2 03/28/2025
 """
 
-
-
 import sys
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
@@ -38,7 +36,6 @@ if not os.path.exists(data_file):
 
 active_events = {}
 
-
 def log_event(event_name, start_time, end_time, notes=""):
     end_date = end_time.strftime("%Y-%m-%d") if end_time else "N/A"
     end_time_str = end_time.strftime("%H:%M:%S") if end_time else "N/A"
@@ -56,7 +53,6 @@ def log_event(event_name, start_time, end_time, notes=""):
     print(f"Logged event to {os.path.abspath(data_file)}:")
     print(data)
 
-
 @app.route('/toggle_event', methods=['POST'])
 def toggle_event():
     data = request.get_json()
@@ -72,7 +68,6 @@ def toggle_event():
         active_events[event_name] = datetime.now()
         return jsonify({"message": f"Started {event_name}", "status": f"{event_name} has started", "active_event": event_name})
 
-
 @app.route('/abort_event', methods=['POST'])
 def abort_event():
     data = request.get_json()
@@ -86,7 +81,6 @@ def abort_event():
         return jsonify({"message": f"Aborted {event_name}", "status": "Event Aborted", "active_event": None})
     else:
         return jsonify({"message": "No active event to abort.", "status": "No active event", "active_event": None})
-
 
 @app.route('/')
 def home():
@@ -138,6 +132,9 @@ def home():
             .btn5 { background-color: #e0bbff; }
             .btn6 { background-color: #fdfd96; }
             .btn7 { background-color: #c1f0f6; }
+            .btn8 { background-color: #d3f8e2; }
+            .btn9 { background-color: #f6d6ad; }
+            .btn10 { background-color: #fbc4ab; }
             .abort-btn { background-color: #ff4444; color: white; width: 220px; height: 50px; }
             .notes-input { padding: 10px; font-size: 16px; width: 400px; border-radius: 10px; border: 1px solid #ccc; }
             .active { background-color: #32CD32 !important; color: white; }
@@ -214,6 +211,9 @@ def home():
             <button class="btn5" onclick="toggleEvent('Surprise', this)">Surprise</button>
             <button class="btn6" onclick="toggleEvent('VR-PAAT', this)">VR-PAAT</button>
             <button class="btn7" onclick="toggleEvent('Sleep Period', this)">Sleep Period</button>
+            <button class="btn8" onclick="toggleEvent('Meal', this)">Meal</button>
+            <button class="btn9" onclick="toggleEvent('Social', this)">Social</button>
+            <button class="btn10" onclick="toggleEvent('Break', this)">Break</button>
             <button class="btn4" onclick="toggleEvent('Other', this)">Other</button>
         </div>
         <div class="controls">
